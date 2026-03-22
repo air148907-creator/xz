@@ -63,7 +63,7 @@ app.get('/api/profile', authMiddleware, (req, res) => {
   });
 });
 
-// Сохранить профиль (со статусом)
+// Сохранить профиль (исправлено: без ON CONFLICT)
 app.post('/api/profile', authMiddleware, (req, res) => {
   const { vk_id } = req;
   const { name, type, zodiac_sign, photo_url, status } = req.body;
@@ -82,24 +82,41 @@ app.post('/api/profile', authMiddleware, (req, res) => {
       return res.status(500).json({ error: err.message });
     }
 
-    // Затем вставляем или обновляем питомца
-    db.run(`
-      INSERT INTO pets (vk_id, name, type, zodiac_sign, photo_url, status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(vk_id) DO UPDATE SET
-        name = excluded.name,
-        type = excluded.type,
-        zodiac_sign = excluded.zodiac_sign,
-        photo_url = excluded.photo_url,
-        status = excluded.status,
-        updated_at = CURRENT_TIMESTAMP
-    `, [vk_id, name, type, zodiac_sign, photo_url, status], function(err) {
+    // Проверяем, существует ли питомец
+    db.get('SELECT id FROM pets WHERE vk_id = ?', [vk_id], (err, existing) => {
       if (err) {
-        console.error('Ошибка INSERT/UPDATE в pets:', err);
+        console.error('Ошибка проверки существования:', err);
         return res.status(500).json({ error: err.message });
       }
-      console.log('Профиль сохранён успешно, id:', this.lastID);
-      res.json({ success: true });
+
+      if (existing) {
+        // Обновляем
+        db.run(`
+          UPDATE pets
+          SET name = ?, type = ?, zodiac_sign = ?, photo_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE vk_id = ?
+        `, [name, type, zodiac_sign, photo_url, status, vk_id], function(err) {
+          if (err) {
+            console.error('Ошибка UPDATE pets:', err);
+            return res.status(500).json({ error: err.message });
+          }
+          console.log('Профиль обновлён успешно');
+          res.json({ success: true });
+        });
+      } else {
+        // Вставляем
+        db.run(`
+          INSERT INTO pets (vk_id, name, type, zodiac_sign, photo_url, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `, [vk_id, name, type, zodiac_sign, photo_url, status], function(err) {
+          if (err) {
+            console.error('Ошибка INSERT pets:', err);
+            return res.status(500).json({ error: err.message });
+          }
+          console.log('Профиль создан успешно, id:', this.lastID);
+          res.json({ success: true });
+        });
+      }
     });
   });
 });
