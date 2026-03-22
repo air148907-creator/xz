@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Мысли питомца</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/@vkontakte/vk-bridge@2.15.0/dist/browser.min.js"></script>
+</head>
+<body>
+    <div class="app-container" id="app">
+        <div class="loading-screen" id="loadingScreen">
+            <div class="loader"></div>
+            <p>Загружаем...</p>
+        </div>
+
+        <!-- Экран профиля -->
+        <div class="profile-screen hidden" id="profileScreen">
+            <h1 class="title" id="profileTitle">🫵 Кто тут у нас?</h1>
+            <div class="input-group">
+                <label for="petName">Имя питомца</label>
+                <input type="text" id="petName" placeholder="Например, Барсик" maxlength="20">
+            </div>
+            <div class="input-group">
+                <label for="petType">Кто он?</label>
+                <select id="petType">
+                    <option value="Кот">🐱 Кот</option>
+                    <option value="Кошка">🐈 Кошка</option>
+                    <option value="Пёс">🐶 Пёс</option>
+                    <option value="Собака">🐕 Собака</option>
+                    <option value="Попугай">🦜 Попугай</option>
+                    <option value="Хомяк">🐹 Хомяк</option>
+                    <option value="Кролик">🐰 Кролик</option>
+                    <option value="Другой">❓ Другой</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="zodiacSign">Твой знак зодиака</label>
+                <select id="zodiacSign">
+                    <option value="">-- выбери знак --</option>
+                    <option value="Овен">♈ Овен</option>
+                    <option value="Телец">♉ Телец</option>
+                    <option value="Близнецы">♊ Близнецы</option>
+                    <option value="Рак">♋ Рак</option>
+                    <option value="Лев">♌ Лев</option>
+                    <option value="Дева">♍ Дева</option>
+                    <option value="Весы">♎ Весы</option>
+                    <option value="Скорпион">♏ Скорпион</option>
+                    <option value="Стрелец">♐ Стрелец</option>
+                    <option value="Козерог">♑ Козерог</option>
+                    <option value="Водолей">♒ Водолей</option>
+                    <option value="Рыбы">♓ Рыбы</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="petStatus">Статус питомца</label>
+                <input type="text" id="petStatus" placeholder="Напишите что-нибудь о вашем питомце" maxlength="100">
+            </div>
+            <button class="vk-button" id="saveProfileBtn">Сохранить и продолжить</button>
+        </div>
+
+        <!-- Основной интерфейс -->
+        <div class="main-interface hidden" id="mainInterface">
+            <div class="header">
+                <div class="pet-info" id="petInfoDisplay"></div>
+                <button class="edit-profile-btn" id="editProfileBtn" title="Редактировать профиль">✏️</button>
+            </div>
+
+            <div class="tabs">
+                <button class="tab-btn active" id="tabThoughts">💭 Приветствие</button>
+                <button class="tab-btn" id="tabChat">💬 Чат с Мафией</button>
+                <button class="tab-btn" id="tabHoroscope">🔮 Гороскоп</button>
+                <button class="tab-btn" id="tabBulletin">📋 Объявления</button>
+                <button class="tab-btn" id="tabFriendsFeed">👥 Лента друзей</button>
+                <button class="tab-btn" id="tabRating">🏆 Рейтинг</button>
+            </div>
+
+            <!-- Вкладка Приветствие -->
+            <div class="tab-content active" id="thoughtsTab">
+                <div style="padding: 30px 20px; text-align: center;">
+                    <h2 style="font-size: 28px; margin-bottom: 15px;">Привет, друг! 👋</h2>
+                    <p style="font-size: 18px; margin-bottom: 30px; color: #555;">
+                        Заходи в наше официальное сообщество — там много интересного для тебя и твоего питомца!
+                    </p>
+                    <button class="vk-button" id="openCommunityBtn" style="background: #2A5885;">Перейти в сообщество</button>
+                </div>
+            </div>
+
+            <!-- Вкладка чата -->
+            <div class="tab-content" id="chatTab">
+                <div class="chat-wrapper">
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input-wrapper">
+                        <div class="chat-input-area">
+                            <input type="text" id="chatInput" placeholder="Спроси Мафию..." maxlength="200">
+                            <button class="vk-button send-btn" id="sendChatBtn">➤</button>
+                            <button class="vk-button clear-chat-btn" id="clearChatBtn" title="Очистить историю чата">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Вкладка гороскопа -->
+            <div class="tab-content" id="horoscopeTab">
+                <div class="horoscope-container" style="padding: 15px;">
+                    <div id="horoscopeText" class="horoscope-text" style="font-size: 18px; line-height: 1.5; background: #f0f0f0; border-radius: 20px; padding: 25px; min-height: 200px;"></div>
+                    <div id="horoscopeLoading" class="hidden" style="text-align: center; margin-top: 20px;">
+                        <div class="loader" style="width: 30px; height: 30px;"></div>
+                        <p>Кот Тимофей составляет прогноз...</p>
+                    </div>
+                    <div id="horoscopeTimer" class="horoscope-timer"></div>
+                    <button class="vk-button" id="shareHoroscopeBtn" style="margin-top: 15px; background: #4CAF50;">📤 Поделиться гороскопом</button>
+                </div>
+            </div>
+
+            <!-- Вкладка объявлений -->
+            <div class="tab-content" id="bulletinTab">
+                <div class="bulletin-container">
+                    <h3 class="bulletin-title">📢 Полезные посты</h3>
+                    <div class="bulletin-buttons">
+                        <button class="bulletin-item" data-section="dating"><span class="bulletin-icon">💕</span><span class="bulletin-text">Знакомства для питомцев</span></button>
+                        <button class="bulletin-item" data-section="exhibition"><span class="bulletin-icon">🖼️</span><span class="bulletin-text">ФОТО Выставка</span></button>
+                        <button class="bulletin-item" data-section="allinone"><span class="bulletin-icon">🔍</span><span class="bulletin-text">Пропал / Найден / В добрые руки</span></button>
+                    </div>
+                    <p class="bulletin-note">Нажмите, чтобы открыть пост в сообществе</p>
+                </div>
+            </div>
+
+            <!-- Вкладка ленты друзей -->
+            <div class="tab-content" id="friendsFeedTab">
+                <div id="friendsFeedContainer" style="padding: 15px;"></div>
+                <div style="text-align: center; padding: 10px;">
+                    <button id="loadMoreFriends" class="vk-button" style="background: #666;">Загрузить ещё</button>
+                </div>
+            </div>
+
+            <!-- Вкладка рейтинга -->
+            <div class="tab-content" id="ratingTab">
+                <div style="padding: 15px;">
+                    <h3 style="margin-bottom: 15px;">🏆 Топ-3 за последние 24 часа</h3>
+                    <div id="top24hContainer" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 25px;"></div>
+                    
+                    <h3 style="margin-bottom: 15px;">📊 Общий рейтинг питомцев</h3>
+                    <div id="ratingContainer" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                    <div style="text-align: center; padding: 10px;">
+                        <button id="loadMoreRating" class="vk-button" style="background: #666;">Загрузить ещё</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
