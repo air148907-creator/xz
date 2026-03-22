@@ -36,6 +36,8 @@ async function authMiddleware(req, res, next) {
   const vk_id = req.headers['x-vk-id'];
   const access_token = req.headers['x-access-token'];
 
+  console.log('authMiddleware:', { vk_id, access_token: access_token ? '***' : undefined });
+
   if (!vk_id || !access_token) {
     return res.status(401).json({ error: 'Missing credentials' });
   }
@@ -51,6 +53,7 @@ async function authMiddleware(req, res, next) {
 // Получить профиль
 app.get('/api/profile', authMiddleware, (req, res) => {
   const { vk_id } = req;
+  console.log('GET /api/profile for vk_id:', vk_id);
   db.get('SELECT * FROM pets WHERE vk_id = ?', [vk_id], (err, row) => {
     if (err) {
       console.error('Ошибка SELECT /api/profile:', err);
@@ -65,9 +68,10 @@ app.post('/api/profile', authMiddleware, (req, res) => {
   const { vk_id } = req;
   const { name, type, zodiac_sign, photo_url, status } = req.body;
 
-  console.log('Запрос на сохранение профиля:', { vk_id, name, type, zodiac_sign, status });
+  console.log('POST /api/profile:', { vk_id, name, type, zodiac_sign, status });
 
   if (!name || !type || !zodiac_sign) {
+    console.log('Missing fields');
     return res.status(400).json({ error: 'Missing fields' });
   }
 
@@ -94,7 +98,7 @@ app.post('/api/profile', authMiddleware, (req, res) => {
         console.error('Ошибка INSERT/UPDATE в pets:', err);
         return res.status(500).json({ error: err.message });
       }
-      console.log('Профиль сохранён успешно');
+      console.log('Профиль сохранён успешно, id:', this.lastID);
       res.json({ success: true });
     });
   });
