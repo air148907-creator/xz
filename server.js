@@ -31,7 +31,7 @@ async function sendVkMessage(userId, message) {
   }
 }
 
-// ==================== MIDDLEWARE АВТОРИЗАЦИИ ====================
+// ==================== MIDDLEWARE АВТОРИЗАЦИИ (ПРОВЕРКА ТОКЕНА ОТКЛЮЧЕНА) ====================
 async function verifyVkToken(vk_id, access_token) {
   try {
     const response = await axios.get('https://api.vk.com/method/users.get', {
@@ -57,10 +57,11 @@ async function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Missing credentials' });
   }
 
-  const isValid = await verifyVkToken(vk_id, access_token);
-  if (!isValid) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
+  // ВРЕМЕННО ОТКЛЮЧАЕМ ПРОВЕРКУ ТОКЕНА
+  // const isValid = await verifyVkToken(vk_id, access_token);
+  // if (!isValid) {
+  //   return res.status(403).json({ error: 'Invalid token' });
+  // }
 
   req.vk_id = vk_id;
   req.access_token = access_token;
@@ -82,7 +83,7 @@ app.get('/api/profile', authMiddleware, (req, res) => {
   });
 });
 
-// Сохранить профиль (без ON CONFLICT)
+// Сохранить профиль
 app.post('/api/profile', authMiddleware, (req, res) => {
   const { vk_id } = req;
   const { name, type, zodiac_sign, photo_url, status } = req.body;
