@@ -1,5 +1,4 @@
-// ========== ГАРАНТИРУЕМ НАЛИЧИЕ VK BRIDGE ==========
-// Если реальный VK Bridge не загрузился, создаём эмуляцию
+// Если VK Bridge не загрузился, создаём эмуляцию (работает везде)
 if (!window.vkBridge) {
     window.vkBridge = {
         send: (method, params) => {
@@ -36,8 +35,8 @@ const bridge = window.vkBridge;
 bridge.send('VKWebAppInit').catch(() => {});
 
 // ==================== КОНСТАНТЫ ====================
-const VK_APP_ID = 54466618;          // ID вашего приложения
-const API_BASE_URL = '';              // Пустой, так как статика отдаётся с того же сервера
+const VK_APP_ID = 54466618;
+const API_BASE_URL = ''; // пустой, так как статика отдаётся с того же сервера
 const STORAGE_KEY = 'petProfile';
 const CHAT_HISTORY_KEY = 'chatHistory';
 
