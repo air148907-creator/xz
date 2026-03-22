@@ -31,7 +31,22 @@ async function sendVkMessage(userId, message) {
   }
 }
 
-// ==================== MIDDLEWARE АВТОРИЗАЦИИ (упрощённый) ====================
+// ==================== MIDDLEWARE АВТОРИЗАЦИИ ====================
+async function verifyVkToken(vk_id, access_token) {
+  try {
+    const response = await axios.get('https://api.vk.com/method/users.get', {
+      params: {
+        user_ids: vk_id,
+        access_token,
+        v: '5.131'
+      }
+    });
+    return !response.data.error;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function authMiddleware(req, res, next) {
   const vk_id = req.headers['x-vk-id'];
   const access_token = req.headers['x-access-token'];
@@ -42,7 +57,11 @@ async function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Missing credentials' });
   }
 
-  // Пропускаем любые токены (для тестирования)
+  const isValid = await verifyVkToken(vk_id, access_token);
+  if (!isValid) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
+
   req.vk_id = vk_id;
   req.access_token = access_token;
   next();
@@ -63,7 +82,7 @@ app.get('/api/profile', authMiddleware, (req, res) => {
   });
 });
 
-// Сохранить профиль (исправлено: без ON CONFLICT)
+// Сохранить профиль (без ON CONFLICT)
 app.post('/api/profile', authMiddleware, (req, res) => {
   const { vk_id } = req;
   const { name, type, zodiac_sign, photo_url, status } = req.body;
@@ -75,14 +94,12 @@ app.post('/api/profile', authMiddleware, (req, res) => {
     return res.status(400).json({ error: 'Missing fields' });
   }
 
-  // Сначала создаём пользователя, если его нет
   db.run('INSERT OR IGNORE INTO users (vk_id, access_token) VALUES (?, ?)', [vk_id, req.access_token], (err) => {
     if (err) {
       console.error('Ошибка INSERT в users:', err);
       return res.status(500).json({ error: err.message });
     }
 
-    // Проверяем, существует ли питомец
     db.get('SELECT id FROM pets WHERE vk_id = ?', [vk_id], (err, existing) => {
       if (err) {
         console.error('Ошибка проверки существования:', err);
@@ -90,7 +107,6 @@ app.post('/api/profile', authMiddleware, (req, res) => {
       }
 
       if (existing) {
-        // Обновляем
         db.run(`
           UPDATE pets
           SET name = ?, type = ?, zodiac_sign = ?, photo_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
@@ -104,7 +120,6 @@ app.post('/api/profile', authMiddleware, (req, res) => {
           res.json({ success: true });
         });
       } else {
-        // Вставляем
         db.run(`
           INSERT INTO pets (vk_id, name, type, zodiac_sign, photo_url, status, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
