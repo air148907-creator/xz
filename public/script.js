@@ -126,7 +126,6 @@ function clearChatHistory() {
         alert('Очистка временно недоступна. Попробуйте позже.');
         return;
     }
-
     if (confirmed) {
         localStorage.removeItem(CHAT_HISTORY_KEY);
         renderChatMessages();
@@ -143,7 +142,6 @@ async function sendToMistral(userMessage) {
 
     const history = loadChatHistory();
     const recent = history.slice(-6);
-
     const messages = [
         { role: 'system', content: cachedSystemPrompt },
         ...recent.map(m => ({ role: m.role, content: m.content })),
@@ -156,12 +154,10 @@ async function sendToMistral(userMessage) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ messages })
         });
-
         if (!response.ok) {
             console.error('Server error:', await response.text());
             return null;
         }
-
         const data = await response.json();
         return data.choices[0].message.content.trim();
     } catch (error) {
@@ -223,9 +219,7 @@ async function generateHoroscopeViaMistral(zodiacSign, petName, petType) {
                 ]
             })
         });
-
         if (!response.ok) return null;
-
         const data = await response.json();
         return data.choices[0].message.content.trim();
     } catch (error) {
@@ -433,7 +427,6 @@ async function toggleLike(petId) {
         }
     });
     const result = await response.json();
-    // Обновляем текущую вкладку
     const activeTab = document.querySelector('.tab-btn.active')?.id;
     if (activeTab === 'tabFriendsFeed') loadFriendsFeed(true);
     else if (activeTab === 'tabRating') {
@@ -447,7 +440,6 @@ const FRIENDS_LIMIT = 10;
 
 async function loadFriendsFeed(reset = false) {
     if (reset) friendsOffset = 0;
-
     const container = document.getElementById('friendsFeedContainer');
     if (!container) return;
 
@@ -464,18 +456,11 @@ async function loadFriendsFeed(reset = false) {
             }
         });
         const data = await response.json();
-
         if (reset) container.innerHTML = '';
-
-        data.pets.forEach(pet => {
-            container.appendChild(renderPetCard(pet, true));
-        });
-
+        data.pets.forEach(pet => container.appendChild(renderPetCard(pet, true)));
         friendsOffset += data.pets.length;
         const loadMoreBtn = document.getElementById('loadMoreFriends');
-        if (loadMoreBtn) {
-            loadMoreBtn.style.display = data.pets.length < FRIENDS_LIMIT ? 'none' : 'block';
-        }
+        if (loadMoreBtn) loadMoreBtn.style.display = data.pets.length < FRIENDS_LIMIT ? 'none' : 'block';
     } catch (e) {
         console.error('Ошибка загрузки ленты', e);
     }
@@ -486,7 +471,6 @@ const RATING_LIMIT = 10;
 
 async function loadRating(reset = false) {
     if (reset) ratingOffset = 0;
-
     const container = document.getElementById('ratingContainer');
     if (!container) return;
 
@@ -494,18 +478,11 @@ async function loadRating(reset = false) {
         const url = `/api/rating?limit=${RATING_LIMIT}&offset=${ratingOffset}`;
         const response = await fetch(url);
         const pets = await response.json();
-
         if (reset) container.innerHTML = '';
-
-        pets.forEach(pet => {
-            container.appendChild(renderPetCard({ ...pet, user_liked: false }, true));
-        });
-
+        pets.forEach(pet => container.appendChild(renderPetCard({ ...pet, user_liked: false }, true)));
         ratingOffset += pets.length;
         const loadMoreBtn = document.getElementById('loadMoreRating');
-        if (loadMoreBtn) {
-            loadMoreBtn.style.display = pets.length < RATING_LIMIT ? 'none' : 'block';
-        }
+        if (loadMoreBtn) loadMoreBtn.style.display = pets.length < RATING_LIMIT ? 'none' : 'block';
     } catch (e) {
         console.error('Ошибка загрузки рейтинга', e);
     }
@@ -519,9 +496,7 @@ async function loadTop24h() {
         const response = await fetch('/api/top24h');
         const pets = await response.json();
         container.innerHTML = '';
-        pets.forEach(pet => {
-            container.appendChild(renderPetCard({ ...pet, user_liked: false }, true));
-        });
+        pets.forEach(pet => container.appendChild(renderPetCard({ ...pet, user_liked: false }, true)));
     } catch (e) {
         console.error('Ошибка загрузки топ-24', e);
     }
@@ -590,7 +565,6 @@ async function updateUIBasedOnProfile() {
             if (document.getElementById('horoscopeTab').classList.contains('active')) {
                 renderHoroscope();
             }
-            // Запрос разрешения на уведомления
             bridge.send('VKWebAppAllowMessagesFromGroup', { group_id: '229782692' }).catch(() => {});
         } else {
             loadingScreen.classList.add('hidden');
