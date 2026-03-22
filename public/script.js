@@ -1,4 +1,4 @@
-// Если VK Bridge не загрузился, создаём эмуляцию (работает везде)
+// Если VK Bridge не загрузился, создаём эмуляцию
 if (!window.vkBridge) {
     window.vkBridge = {
         send: (method, params) => {
@@ -28,7 +28,7 @@ if (!window.vkBridge) {
         },
         supports: () => false
     };
-    console.log('VK Bridge эмулирован (реальный отсутствует)');
+    console.log('VK Bridge эмулирован');
 }
 
 const bridge = window.vkBridge;
@@ -36,7 +36,7 @@ bridge.send('VKWebAppInit').catch(() => {});
 
 // ==================== КОНСТАНТЫ ====================
 const VK_APP_ID = 54466618;
-const API_BASE_URL = ''; // пустой, так как статика отдаётся с того же сервера
+const API_BASE_URL = '';
 const STORAGE_KEY = 'petProfile';
 const CHAT_HISTORY_KEY = 'chatHistory';
 
@@ -524,7 +524,18 @@ async function saveProfileOnServer(name, type, zodiacSign, status = '') {
         })
     });
 
-    if (!response.ok) throw new Error('Ошибка сохранения на сервере');
+    if (!response.ok) {
+        // Пытаемся получить текст ошибки от сервера
+        let errorText;
+        try {
+            const errorData = await response.json();
+            errorText = errorData.error || JSON.stringify(errorData);
+        } catch (e) {
+            errorText = await response.text();
+        }
+        console.error('Ответ сервера при ошибке:', errorText);
+        throw new Error(`Ошибка сохранения на сервере: ${response.status} - ${errorText}`);
+    }
     saveProfileLocally(name, type, zodiacSign, status);
 }
 
