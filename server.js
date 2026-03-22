@@ -9,16 +9,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Раздаём статику из папки public (фронтенд)
+// Раздаём статику из папки public
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ==================== ФУНКЦИЯ ОТПРАВКИ СООБЩЕНИЯ ====================
 async function sendVkMessage(userId, message) {
   const groupToken = process.env.VK_GROUP_TOKEN;
-  if (!groupToken) {
-    console.error('VK_GROUP_TOKEN не задан');
-    return false;
-  }
+  if (!groupToken) return false;
   try {
     const response = await axios.post('https://api.vk.com/method/messages.send', null, {
       params: {
@@ -29,18 +26,36 @@ async function sendVkMessage(userId, message) {
         v: '5.131'
       }
     });
-    if (response.data.error) {
-      console.error('VK API error:', response.data.error);
-      return false;
-    }
-    return true;
+    return !response.data.error;
   } catch (error) {
     console.error('Ошибка отправки сообщения:', error.response?.data || error.message);
     return false;
   }
 }
 
-// ==================== MIDDLEWARE АВТОРИЗАЦИИ ====================
+// ==================== MIDDLEWARE АВТОРИЗАЦИИ (упрощённый для тестирования) ====================
+// Проверка токена через VK API закомментирована, чтобы принять любые заголовки.
+// Для продакшена нужно раскомментировать проверку.
+async function authMiddleware(req, res, next) {
+  const vk_id = req.headers['x-vk-id'];
+  const access_token = req.headers['x-access-token'];
+
+  if (!vk_id || !access_token) {
+    return res.status(401).json({ error: 'Missing credentials' });
+  }
+
+  // Временно пропускаем любые токены (для отладки)
+  // const isValid = await verifyVkToken(vk_id, access_token);
+  // if (!isValid) {
+  //   return res.status(403).json({ error: 'Invalid token' });
+  // }
+
+  req.vk_id = vk_id;
+  req.access_token = access_token;
+  next();
+}
+
+// (Опционально) функция проверки токена — может пригодиться позже
 async function verifyVkToken(vk_id, access_token) {
   try {
     const response = await axios.get('https://api.vk.com/method/users.get', {
@@ -54,24 +69,6 @@ async function verifyVkToken(vk_id, access_token) {
   } catch (e) {
     return false;
   }
-}
-
-async function authMiddleware(req, res, next) {
-  const vk_id = req.headers['x-vk-id'];
-  const access_token = req.headers['x-access-token'];
-
-  if (!vk_id || !access_token) {
-    return res.status(401).json({ error: 'Missing credentials' });
-  }
-
-  const isValid = await verifyVkToken(vk_id, access_token);
-  if (!isValid) {
-    return res.status(403).json({ error: 'Invalid token' });
-  }
-
-  req.vk_id = vk_id;
-  req.access_token = access_token;
-  next();
 }
 
 // ==================== ЭНДПОИНТЫ ====================
@@ -130,7 +127,7 @@ async function getFriendsList(vk_id, access_token) {
   }
 }
 
-// Лента друзей (со статусом)
+// Лента друзей
 app.get('/api/feed/friends', authMiddleware, async (req, res) => {
   const { vk_id, access_token } = req;
   const limit = parseInt(req.query.limit) || 20;
@@ -155,7 +152,6 @@ app.get('/api/feed/friends', authMiddleware, async (req, res) => {
 
   db.all(sql, params, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-
     db.get(`SELECT COUNT(*) as total FROM pets WHERE vk_id IN (${placeholders})`, friendsIds, (err2, row) => {
       if (err2) return res.json({ pets: rows, total: rows.length });
       res.json({ pets: rows, total: row.total });
@@ -185,7 +181,6 @@ app.post('/api/like/:petId', authMiddleware, (req, res) => {
         db.run('INSERT INTO likes (pet_id, vk_id) VALUES (?, ?)', [petId, likerId], function(err) {
           if (err) return res.status(500).json({ error: err.message });
 
-          // Отправляем уведомление владельцу
           if (pet.vk_id !== likerId) {
             db.get('SELECT name FROM pets WHERE vk_id = ?', [likerId], (err, likerPet) => {
               const likerName = likerPet ? likerPet.name : 'Кто-то';
