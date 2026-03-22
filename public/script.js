@@ -1,9 +1,6 @@
-// Инициализация VK Bridge
-const bridge = window.vkBridge;
-
-// ========== ЭМУЛЯЦИЯ VK BRIDGE ДЛЯ ЛОКАЛЬНОЙ РАЗРАБОТКИ ==========
-const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-if (isLocalhost && !window.vkBridge) {
+// ========== ГАРАНТИРУЕМ НАЛИЧИЕ VK BRIDGE ==========
+// Если реальный VK Bridge не загрузился, создаём эмуляцию
+if (!window.vkBridge) {
     window.vkBridge = {
         send: (method, params) => {
             console.log(`[EMULATED] VK Bridge send: ${method}`, params);
@@ -32,10 +29,10 @@ if (isLocalhost && !window.vkBridge) {
         },
         supports: () => false
     };
-    console.log('VK Bridge эмулирован для локальной разработки');
+    console.log('VK Bridge эмулирован (реальный отсутствует)');
 }
-// ================================================================
 
+const bridge = window.vkBridge;
 bridge.send('VKWebAppInit').catch(() => {});
 
 // ==================== КОНСТАНТЫ ====================
