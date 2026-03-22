@@ -8,8 +8,6 @@ const db = require('./db');
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-// Раздаём статику из папки public
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ==================== ФУНКЦИЯ ОТПРАВКИ СООБЩЕНИЯ ====================
@@ -33,9 +31,7 @@ async function sendVkMessage(userId, message) {
   }
 }
 
-// ==================== MIDDLEWARE АВТОРИЗАЦИИ (упрощённый для тестирования) ====================
-// Проверка токена через VK API закомментирована, чтобы принять любые заголовки.
-// Для продакшена нужно раскомментировать проверку.
+// ==================== MIDDLEWARE АВТОРИЗАЦИИ (упрощённый) ====================
 async function authMiddleware(req, res, next) {
   const vk_id = req.headers['x-vk-id'];
   const access_token = req.headers['x-access-token'];
@@ -44,31 +40,10 @@ async function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Missing credentials' });
   }
 
-  // Временно пропускаем любые токены (для отладки)
-  // const isValid = await verifyVkToken(vk_id, access_token);
-  // if (!isValid) {
-  //   return res.status(403).json({ error: 'Invalid token' });
-  // }
-
+  // Пока пропускаем любые токены
   req.vk_id = vk_id;
   req.access_token = access_token;
   next();
-}
-
-// (Опционально) функция проверки токена — может пригодиться позже
-async function verifyVkToken(vk_id, access_token) {
-  try {
-    const response = await axios.get('https://api.vk.com/method/users.get', {
-      params: {
-        user_ids: vk_id,
-        access_token,
-        v: '5.131'
-      }
-    });
-    return !response.data.error;
-  } catch (e) {
-    return false;
-  }
 }
 
 // ==================== ЭНДПОИНТЫ ====================
@@ -77,7 +52,10 @@ async function verifyVkToken(vk_id, access_token) {
 app.get('/api/profile', authMiddleware, (req, res) => {
   const { vk_id } = req;
   db.get('SELECT * FROM pets WHERE vk_id = ?', [vk_id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) {
+      console.error('Ошибка SELECT /api/profile:', err);
+      return res.status(500).json({ error: err.message });
+    }
     res.json(row || null);
   });
 });
@@ -87,25 +65,38 @@ app.post('/api/profile', authMiddleware, (req, res) => {
   const { vk_id } = req;
   const { name, type, zodiac_sign, photo_url, status } = req.body;
 
+  console.log('Запрос на сохранение профиля:', { vk_id, name, type, zodiac_sign, status });
+
   if (!name || !type || !zodiac_sign) {
     return res.status(400).json({ error: 'Missing fields' });
   }
 
-  db.run('INSERT OR IGNORE INTO users (vk_id, access_token) VALUES (?, ?)', [vk_id, req.access_token]);
+  // Сначала создаём пользователя, если его нет
+  db.run('INSERT OR IGNORE INTO users (vk_id, access_token) VALUES (?, ?)', [vk_id, req.access_token], (err) => {
+    if (err) {
+      console.error('Ошибка INSERT в users:', err);
+      return res.status(500).json({ error: err.message });
+    }
 
-  db.run(`
-    INSERT INTO pets (vk_id, name, type, zodiac_sign, photo_url, status, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(vk_id) DO UPDATE SET
-      name = excluded.name,
-      type = excluded.type,
-      zodiac_sign = excluded.zodiac_sign,
-      photo_url = excluded.photo_url,
-      status = excluded.status,
-      updated_at = CURRENT_TIMESTAMP
-  `, [vk_id, name, type, zodiac_sign, photo_url, status], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true });
+    // Затем вставляем или обновляем питомца
+    db.run(`
+      INSERT INTO pets (vk_id, name, type, zodiac_sign, photo_url, status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(vk_id) DO UPDATE SET
+        name = excluded.name,
+        type = excluded.type,
+        zodiac_sign = excluded.zodiac_sign,
+        photo_url = excluded.photo_url,
+        status = excluded.status,
+        updated_at = CURRENT_TIMESTAMP
+    `, [vk_id, name, type, zodiac_sign, photo_url, status], function(err) {
+      if (err) {
+        console.error('Ошибка INSERT/UPDATE в pets:', err);
+        return res.status(500).json({ error: err.message });
+      }
+      console.log('Профиль сохранён успешно');
+      res.json({ success: true });
+    });
   });
 });
 
@@ -151,9 +142,15 @@ app.get('/api/feed/friends', authMiddleware, async (req, res) => {
   const params = [vk_id, ...friendsIds, limit, offset];
 
   db.all(sql, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) {
+      console.error('Ошибка SELECT /api/feed/friends:', err);
+      return res.status(500).json({ error: err.message });
+    }
     db.get(`SELECT COUNT(*) as total FROM pets WHERE vk_id IN (${placeholders})`, friendsIds, (err2, row) => {
-      if (err2) return res.json({ pets: rows, total: rows.length });
+      if (err2) {
+        console.error('Ошибка подсчёта total:', err2);
+        return res.json({ pets: rows, total: rows.length });
+      }
       res.json({ pets: rows, total: row.total });
     });
   });
@@ -170,16 +167,25 @@ app.post('/api/like/:petId', authMiddleware, (req, res) => {
     }
 
     db.get('SELECT id FROM likes WHERE pet_id = ? AND vk_id = ?', [petId, likerId], (err, like) => {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) {
+        console.error('Ошибка SELECT лайка:', err);
+        return res.status(500).json({ error: err.message });
+      }
 
       if (like) {
         db.run('DELETE FROM likes WHERE id = ?', [like.id], function(err) {
-          if (err) return res.status(500).json({ error: err.message });
+          if (err) {
+            console.error('Ошибка DELETE лайка:', err);
+            return res.status(500).json({ error: err.message });
+          }
           res.json({ liked: false });
         });
       } else {
         db.run('INSERT INTO likes (pet_id, vk_id) VALUES (?, ?)', [petId, likerId], function(err) {
-          if (err) return res.status(500).json({ error: err.message });
+          if (err) {
+            console.error('Ошибка INSERT лайка:', err);
+            return res.status(500).json({ error: err.message });
+          }
 
           if (pet.vk_id !== likerId) {
             db.get('SELECT name FROM pets WHERE vk_id = ?', [likerId], (err, likerPet) => {
@@ -209,7 +215,10 @@ app.get('/api/rating', (req, res) => {
     ORDER BY likes_count DESC, p.created_at DESC
     LIMIT ? OFFSET ?
   `, [limit, offset], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) {
+      console.error('Ошибка SELECT /api/rating:', err);
+      return res.status(500).json({ error: err.message });
+    }
     res.json(rows);
   });
 });
@@ -225,7 +234,10 @@ app.get('/api/top24h', (req, res) => {
     ORDER BY likes_count DESC
     LIMIT 3
   `, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) {
+      console.error('Ошибка SELECT /api/top24h:', err);
+      return res.status(500).json({ error: err.message });
+    }
     res.json(rows);
   });
 });
