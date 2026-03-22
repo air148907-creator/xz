@@ -42,7 +42,7 @@ async function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Missing credentials' });
   }
 
-  // Пока пропускаем любые токены
+  // Пропускаем любые токены (для тестирования)
   req.vk_id = vk_id;
   req.access_token = access_token;
   next();
