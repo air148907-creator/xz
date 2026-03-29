@@ -50,11 +50,25 @@ body {
     100% { transform: rotate(360deg); }
 }
 
+/* ====================== ЭКРАН РЕГИСТРАЦИИ ====================== */
 .profile-screen {
-    padding: 40px 25px;
+    padding: 40px 25px 160px 25px;   /* большой отступ снизу для кнопки */
     height: 600px;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;                 /* Включаем прокрутку */
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #764ba2 #e0e0e0;
+}
+
+.profile-screen::-webkit-scrollbar {
+    width: 6px;
+}
+
+.profile-screen::-webkit-scrollbar-thumb {
+    background: #764ba2;
+    border-radius: 10px;
 }
 
 .hidden {
@@ -108,9 +122,12 @@ body {
     font-weight: 600;
     cursor: pointer;
     transition: background 0.3s, transform 0.1s;
-    margin-top: 20px;
+    margin-top: 30px;
     width: 100%;
     touch-action: manipulation;
+    position: sticky;
+    bottom: 20px;
+    z-index: 10;
 }
 
 .vk-button:hover {
@@ -121,6 +138,7 @@ body {
     transform: scale(0.98);
 }
 
+/* ====================== ОСНОВНОЙ ИНТЕРФЕЙС ====================== */
 .main-interface {
     display: flex;
     flex-direction: column;
@@ -410,13 +428,14 @@ body {
     transform: scale(0.95);
 }
 
-/* НОВЫЕ СТИЛИ ДЛЯ ЛЕНТЫ И ПОДВКЛАДОК */
+/* Лента и посты */
 .feed-subtabs {
     display: flex;
     gap: 10px;
     padding: 10px;
     border-bottom: 1px solid #eee;
 }
+
 .feed-subtab-btn {
     flex: 1;
     padding: 8px;
@@ -425,12 +444,12 @@ body {
     border-radius: 20px;
     cursor: pointer;
 }
+
 .feed-subtab-btn.active {
     background: #764ba2;
     color: white;
 }
 
-/* Стили для постов */
 .post-card {
     background: white;
     border-radius: 20px;
@@ -438,30 +457,36 @@ body {
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
+
 .post-header {
     display: flex;
     align-items: center;
     padding: 10px;
     gap: 10px;
 }
+
 .post-avatar {
     width: 40px;
     height: 40px;
     border-radius: 50%;
     object-fit: cover;
 }
+
 .post-author {
     font-weight: bold;
 }
+
 .post-image {
     width: 100%;
     max-height: 400px;
     object-fit: cover;
 }
+
 .post-caption {
     padding: 10px;
     font-size: 14px;
 }
+
 .post-date {
     padding: 5px 10px 10px;
     font-size: 12px;

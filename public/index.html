@@ -14,7 +14,7 @@
             <p>Загружаем...</p>
         </div>
 
-        <!-- Экран профиля -->
+        <!-- Экран профиля (с прокруткой) -->
         <div class="profile-screen hidden" id="profileScreen">
             <h1 class="title" id="profileTitle">🫵 Кто тут у нас?</h1>
             
@@ -69,10 +69,14 @@
                 <label for="petStatus">Статус питомца</label>
                 <input type="text" id="petStatus" placeholder="Напишите что-нибудь о вашем питомце" maxlength="100">
             </div>
+
+            <!-- Дополнительный отступ для удобной прокрутки -->
+            <div style="height: 120px;"></div>
+
             <button class="vk-button" id="saveProfileBtn">Сохранить и продолжить</button>
         </div>
 
-        <!-- Основной интерфейс -->
+        <!-- Основной интерфейс (без изменений) -->
         <div class="main-interface hidden" id="mainInterface">
             <div class="header">
                 <div class="pet-info" id="petInfoDisplay"></div>
