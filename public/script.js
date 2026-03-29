@@ -12,7 +12,9 @@ if (!window.vkBridge) {
             if (method === 'VKWebAppInit') return Promise.resolve({ result: true });
             if (method === 'VKWebAppShare') return Promise.resolve({ result: true });
             if (method === 'VKWebAppAllowMessagesFromGroup') return Promise.resolve({ result: true });
-            if (method === 'VKWebAppUploadPhoto') return Promise.resolve({ photo_id: '123456', owner_id: '123456789' });
+            if (method === 'VKWebAppUploadPhoto') {
+                return Promise.resolve({ photo_id: '123456', owner_id: '123456789' });
+            }
             return Promise.resolve({});
         },
         supports: () => false
@@ -38,7 +40,13 @@ function getTodayDateString() {
 }
 
 function saveProfileLocally(name, type, zodiacSign, status = '', avatarUrl = '') {
-    const profile = { petName: name, petType: type, zodiacSign: zodiacSign, status: status, avatarUrl: avatarUrl };
+    const profile = { 
+        petName: name, 
+        petType: type, 
+        zodiacSign: zodiacSign, 
+        status: status, 
+        avatarUrl: avatarUrl 
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
     cachedSystemPrompt = '';
 }
@@ -71,6 +79,12 @@ async function uploadAvatar() {
     const preview = document.getElementById('avatarPreview');
     if (!preview) return;
 
+    // Проверка поддержки VKWebAppUploadPhoto
+    if (typeof bridge.supports === 'function' && !bridge.supports('VKWebAppUploadPhoto')) {
+        alert('📸 Загрузка аватарки доступна только в мобильном приложении VK.\n\nОткройте мини-приложение через официальное приложение VK на телефоне.');
+        return;
+    }
+
     const originalContent = preview.innerHTML;
 
     try {
@@ -87,18 +101,25 @@ async function uploadAvatar() {
             alert('Не удалось получить фото от VK.');
         }
     } catch (error) {
-        console.error('Ошибка загрузки аватарки:', error);
         preview.innerHTML = originalContent;
-        if (error?.error_code === 1) {
-            alert('❌ Нет прав на загрузку фото.\n\nПожалуйста, разрешите приложению доступ к фотографиям в настройках VK.');
+        console.error('Ошибка загрузки аватарки:', error);
+
+        if (error?.error_data?.error_reason?.includes('Unsupported platform')) {
+            alert('📸 Загрузка аватарки работает только в мобильном приложении VK.');
         } else {
-            alert('Не удалось загрузить аватарку. Попробуйте ещё раз.');
+            alert('Не удалось загрузить аватарку. Попробуйте позже.');
         }
     }
 }
 
 // ==================== ЗАГРУЗКА ФОТО В ЛЕНТУ ====================
 async function uploadPhotoToVK() {
+    // Проверка поддержки VKWebAppUploadPhoto
+    if (typeof bridge.supports === 'function' && !bridge.supports('VKWebAppUploadPhoto')) {
+        alert('📸 Загрузка и публикация фото доступны только в мобильном приложении VK.');
+        return;
+    }
+
     try {
         const result = await bridge.send('VKWebAppUploadPhoto', {});
         
@@ -134,8 +155,9 @@ async function uploadPhotoToVK() {
         }
     } catch (error) {
         console.error('Ошибка загрузки фото:', error);
-        if (error?.error_code === 1) {
-            alert('❌ Нет прав на загрузку фото.\n\nРазрешите приложению доступ к фотографиям в настройках VK.');
+        
+        if (error?.error_data?.error_reason?.includes('Unsupported platform')) {
+            alert('📸 Загрузка фото работает только в мобильном приложении VK.');
         } else {
             alert('Не удалось загрузить фото. Попробуйте ещё раз.');
         }
@@ -779,8 +801,8 @@ function switchTab(tabName) {
 }
 
 // ==================== ОБРАБОТЧИКИ ====================
-document.addEventListener('DOMContentLoaded', async () => {   // ← Исправлено: добавлен async
-    await updateUIBasedOnProfile();   // ← Теперь await работает корректно
+document.addEventListener('DOMContentLoaded', async () => {
+    await updateUIBasedOnProfile();
 
     document.getElementById('saveProfileBtn')?.addEventListener('click', async () => {
         const petName = document.getElementById('petName')?.value.trim();
