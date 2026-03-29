@@ -539,12 +539,26 @@ function renderPost(post) {
 
 async function uploadPhotoToVK() {
     try {
+        // 1. Убедимся, что есть права на wall и photos
+        const token = await ensureAccessToken(); // уже запрашивает friends,photos,wall
+
+        // 2. Запрашиваем загрузку фото (выбор из галереи или камеры)
         const result = await bridge.send('VKWebAppUploadPhoto', {});
-        const photoId = result.photo_id;
+        
+        // 3. Нормализуем photo_id (в разных версиях Bridge поле может называться photo_id или id)
+        let photoId = result.photo_id || result.id;
+        if (!photoId) {
+            console.error('Не удалось получить photo_id', result);
+            alert('Не удалось загрузить фото: нет photo_id в ответе VK');
+            return;
+        }
+
         const caption = prompt('Введите подпись к фото (необязательно):', '');
-        const token = await ensureAccessToken();
+        
         const userInfo = await bridge.send('VKWebAppGetUserInfo');
         const vkId = userInfo.id;
+
+        // 4. Отправляем на сервер
         const response = await fetch('/api/wall/post', {
             method: 'POST',
             headers: {
@@ -552,19 +566,29 @@ async function uploadPhotoToVK() {
                 'X-VK-ID': vkId,
                 'X-Access-Token': token
             },
-            body: JSON.stringify({ photo_id: photoId, caption: caption })
+            body: JSON.stringify({ photo_id: photoId, caption: caption || '' })
         });
+
         const data = await response.json();
         if (data.success) {
-            alert('Фото опубликовано на стене и в ленте приложения!');
-            const activeSubtab = document.querySelector('.feed-subtab-btn.active').dataset.feed;
+            alert('✅ Фото опубликовано на стене и в ленте приложения!');
+            // Обновляем активную ленту
+            const activeSubtab = document.querySelector('.feed-subtab-btn.active')?.dataset.feed;
             if (activeSubtab === 'all') loadAllFeed(true);
+            else if (activeSubtab === 'friends') loadFriendsFeed(true);
         } else {
-            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+            alert('❌ Ошибка сервера: ' + (data.error || 'Неизвестная ошибка'));
         }
     } catch (error) {
         console.error('Ошибка загрузки фото:', error);
-        alert('Не удалось загрузить фото. Возможно, нет прав.');
+        // Расшифровываем возможные ошибки VK Bridge
+        if (error.message?.includes('permission')) {
+            alert('Нет прав на загрузку фото. Пожалуйста, перезапустите приложение и разрешите доступ к фото и стене.');
+        } else if (error.message?.includes('cancelled')) {
+            alert('Загрузка фото отменена.');
+        } else {
+            alert('Не удалось загрузить фото. Проверьте подключение и права доступа.');
+        }
     }
 }
 
@@ -619,10 +643,45 @@ async function saveProfileOnServer(name, type, zodiacSign, status = '', avatarUr
     saveProfileLocally(name, type, zodiacSign, status);
 }
 
-async function loadProfileFromServer() {
-    const token = await ensureAccessToken();
-    const userInfo = await bridge.send('VKWebAppGetUserInfo');
-    const vkId = userInfo.id;
+async function uploadAvatar() {
+    try {
+        const token = await ensureAccessToken();
+        const userInfo = await bridge.send('VKWebAppGetUserInfo');
+        const vkId = userInfo.id;
+
+        // Запрашиваем выбор фото
+        const result = await bridge.send('VKWebAppUploadPhoto', {});
+        let photoId = result.photo_id || result.id;
+        if (!photoId) {
+            alert('Не удалось загрузить фото для аватара');
+            return;
+        }
+
+        // Получаем URL фото (можно через VK API, но проще – сохраняем photo_id и owner_id)
+        // Предположим, что сервер умеет принимать photo_id и сохранять аватар.
+        const response = await fetch('/api/profile/avatar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-VK-ID': vkId,
+                'X-Access-Token': token
+            },
+            body: JSON.stringify({ photo_id: photoId })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            alert('Аватар обновлён!');
+            // Перезагружаем интерфейс, чтобы отобразить новый аватар
+            updateUIBasedOnProfile();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Не удалось сохранить аватар'));
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки аватара:', error);
+        alert('Не удалось загрузить аватар. Попробуйте позже.');
+    }
+}
 
     let avatarUrl = '';
     try {

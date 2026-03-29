@@ -17,6 +17,19 @@
         <!-- Экран профиля -->
         <div class="profile-screen hidden" id="profileScreen">
             <h1 class="title" id="profileTitle">🫵 Кто тут у нас?</h1>
+            
+            <div class="input-group">
+                <label>Аватарка питомца</label>
+                <div style="text-align: center; margin: 15px 0 25px;">
+                    <div id="avatarPreview" style="width: 130px; height: 130px; margin: 0 auto 12px; border-radius: 50%; background: #f0f0f0; overflow: hidden; border: 5px solid #764ba2; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                        <span style="line-height: 130px; font-size: 55px;">🐾</span>
+                    </div>
+                    <button class="vk-button" id="uploadAvatarBtn" style="background: #4CAF50; padding: 12px 24px; font-size: 15px; width: auto; display: inline-block;">
+                        📸 Загрузить аватарку
+                    </button>
+                </div>
+            </div>
+
             <div class="input-group">
                 <label for="petName">Имя питомца</label>
                 <input type="text" id="petName" placeholder="Например, Барсик" maxlength="20">
@@ -127,7 +140,7 @@
                 </div>
             </div>
 
-            <!-- Вкладка Лента (с подвкладками Друзья / Все) -->
+            <!-- Вкладка Лента -->
             <div class="tab-content" id="feedTab">
                 <div class="feed-subtabs">
                     <button class="feed-subtab-btn active" data-feed="friends">👥 Друзья</button>
