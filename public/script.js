@@ -25,11 +25,11 @@ bridge.send('VKWebAppInit').catch(() => {});
 
 // ==================== КОНСТАНТЫ ====================
 const VK_APP_ID = 54466618;
-const API_BASE_URL = '';
 const STORAGE_KEY = 'petProfile';
 const CHAT_HISTORY_KEY = 'chatHistory';
 
 let cachedSystemPrompt = '';
+let currentAvatarUrl = '';
 
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 function getTodayDateString() {
@@ -37,8 +37,8 @@ function getTodayDateString() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function saveProfileLocally(name, type, zodiacSign, status = '') {
-    const profile = { petName: name, petType: type, zodiacSign: zodiacSign, status: status };
+function saveProfileLocally(name, type, zodiacSign, status = '', avatarUrl = '') {
+    const profile = { petName: name, petType: type, zodiacSign: zodiacSign, status: status, avatarUrl: avatarUrl };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
     cachedSystemPrompt = '';
 }
@@ -66,7 +66,83 @@ async function ensureAccessToken() {
     });
 }
 
-// ==================== ФУНКЦИИ ЧАТА (без изменений) ====================
+// ==================== ЗАГРУЗКА АВАТАРКИ ====================
+async function uploadAvatar() {
+    const preview = document.getElementById('avatarPreview');
+    if (!preview) return;
+
+    const originalContent = preview.innerHTML;
+
+    try {
+        preview.innerHTML = `<div class="loader" style="width:40px;height:40px;margin:45px auto 0;"></div>`;
+        
+        const result = await bridge.send('VKWebAppUploadPhoto', {});
+        
+        if (result && result.photo_id) {
+            currentAvatarUrl = `https://vk.com/photo${result.owner_id || ''}_${result.photo_id}`;
+            preview.innerHTML = `<img src="${currentAvatarUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+            alert('✅ Аватарка успешно загружена!');
+        } else {
+            preview.innerHTML = originalContent;
+            alert('Не удалось получить фото от VK.');
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки аватарки:', error);
+        preview.innerHTML = originalContent;
+        if (error?.error_code === 1) {
+            alert('❌ Нет прав на загрузку фото.\n\nПожалуйста, разрешите приложению доступ к фотографиям в настройках VK.');
+        } else {
+            alert('Не удалось загрузить аватарку. Попробуйте ещё раз.');
+        }
+    }
+}
+
+// ==================== ЗАГРУЗКА ФОТО В ЛЕНТУ ====================
+async function uploadPhotoToVK() {
+    try {
+        const result = await bridge.send('VKWebAppUploadPhoto', {});
+        
+        if (!result || !result.photo_id) {
+            alert('Не удалось загрузить фото.');
+            return;
+        }
+
+        const caption = prompt('Введите подпись к фото (необязательно):', 'Мой питомец ❤️') || '';
+
+        const token = await ensureAccessToken();
+        const userInfo = await bridge.send('VKWebAppGetUserInfo');
+        const vkId = userInfo.id;
+
+        const response = await fetch('/api/wall/post', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-VK-ID': vkId,
+                'X-Access-Token': token
+            },
+            body: JSON.stringify({ photo_id: result.photo_id, caption: caption })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert('✅ Фото опубликовано на стене и в ленте приложения!');
+            const activeSubtab = document.querySelector('.feed-subtab-btn.active')?.dataset.feed;
+            if (activeSubtab === 'all') loadAllFeed(true);
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки фото:', error);
+        if (error?.error_code === 1) {
+            alert('❌ Нет прав на загрузку фото.\n\nРазрешите приложению доступ к фотографиям в настройках VK.');
+        } else {
+            alert('Не удалось загрузить фото. Попробуйте ещё раз.');
+        }
+    }
+}
+
+// ==================== ФУНКЦИИ ЧАТА ====================
 function loadChatHistory() {
     const history = localStorage.getItem(CHAT_HISTORY_KEY);
     return history ? JSON.parse(history) : [];
@@ -183,7 +259,7 @@ async function handleChatSend() {
     scrollChatToBottom(true);
 }
 
-// ==================== ГОРОСКОП (без изменений) ====================
+// ==================== ГОРОСКОП ====================
 function getTimeUntilMidnight() {
     const now = new Date();
     const midnight = new Date(now);
@@ -494,8 +570,7 @@ async function loadTop24h() {
     }
 }
 
-// ==================== НОВЫЕ ФУНКЦИИ ДЛЯ ЛЕНТЫ ВСЕХ И ПУБЛИКАЦИИ ====================
-
+// ==================== НОВЫЕ ФУНКЦИИ ДЛЯ ЛЕНТЫ ВСЕХ ====================
 let allOffset = 0;
 const ALL_LIMIT = 10;
 
@@ -535,61 +610,6 @@ function renderPost(post) {
         <div class="post-date">${new Date(post.created_at).toLocaleString()}</div>
     `;
     return div;
-}
-
-async function uploadPhotoToVK() {
-    try {
-        // 1. Убедимся, что есть права на wall и photos
-        const token = await ensureAccessToken(); // уже запрашивает friends,photos,wall
-
-        // 2. Запрашиваем загрузку фото (выбор из галереи или камеры)
-        const result = await bridge.send('VKWebAppUploadPhoto', {});
-        
-        // 3. Нормализуем photo_id (в разных версиях Bridge поле может называться photo_id или id)
-        let photoId = result.photo_id || result.id;
-        if (!photoId) {
-            console.error('Не удалось получить photo_id', result);
-            alert('Не удалось загрузить фото: нет photo_id в ответе VK');
-            return;
-        }
-
-        const caption = prompt('Введите подпись к фото (необязательно):', '');
-        
-        const userInfo = await bridge.send('VKWebAppGetUserInfo');
-        const vkId = userInfo.id;
-
-        // 4. Отправляем на сервер
-        const response = await fetch('/api/wall/post', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-VK-ID': vkId,
-                'X-Access-Token': token
-            },
-            body: JSON.stringify({ photo_id: photoId, caption: caption || '' })
-        });
-
-        const data = await response.json();
-        if (data.success) {
-            alert('✅ Фото опубликовано на стене и в ленте приложения!');
-            // Обновляем активную ленту
-            const activeSubtab = document.querySelector('.feed-subtab-btn.active')?.dataset.feed;
-            if (activeSubtab === 'all') loadAllFeed(true);
-            else if (activeSubtab === 'friends') loadFriendsFeed(true);
-        } else {
-            alert('❌ Ошибка сервера: ' + (data.error || 'Неизвестная ошибка'));
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки фото:', error);
-        // Расшифровываем возможные ошибки VK Bridge
-        if (error.message?.includes('permission')) {
-            alert('Нет прав на загрузку фото. Пожалуйста, перезапустите приложение и разрешите доступ к фото и стене.');
-        } else if (error.message?.includes('cancelled')) {
-            alert('Загрузка фото отменена.');
-        } else {
-            alert('Не удалось загрузить фото. Проверьте подключение и права доступа.');
-        }
-    }
 }
 
 function switchFeedSubtab(feedType) {
@@ -633,61 +653,19 @@ async function saveProfileOnServer(name, type, zodiacSign, status = '', avatarUr
             name,
             type,
             zodiac_sign: zodiacSign,
-            photo_url: '',
             avatar_url: avatarUrl,
             status: status
         })
     });
 
     if (!response.ok) throw new Error('Ошибка сохранения на сервере');
-    saveProfileLocally(name, type, zodiacSign, status);
+    saveProfileLocally(name, type, zodiacSign, status, avatarUrl);
 }
 
-async function uploadAvatar() {
-    try {
-        const token = await ensureAccessToken();
-        const userInfo = await bridge.send('VKWebAppGetUserInfo');
-        const vkId = userInfo.id;
-
-        // Запрашиваем выбор фото
-        const result = await bridge.send('VKWebAppUploadPhoto', {});
-        let photoId = result.photo_id || result.id;
-        if (!photoId) {
-            alert('Не удалось загрузить фото для аватара');
-            return;
-        }
-
-        // Получаем URL фото (можно через VK API, но проще – сохраняем photo_id и owner_id)
-        // Предположим, что сервер умеет принимать photo_id и сохранять аватар.
-        const response = await fetch('/api/profile/avatar', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-VK-ID': vkId,
-                'X-Access-Token': token
-            },
-            body: JSON.stringify({ photo_id: photoId })
-        });
-
-        const data = await response.json();
-        if (data.success) {
-            alert('Аватар обновлён!');
-            // Перезагружаем интерфейс, чтобы отобразить новый аватар
-            updateUIBasedOnProfile();
-        } else {
-            alert('Ошибка: ' + (data.error || 'Не удалось сохранить аватар'));
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки аватара:', error);
-        alert('Не удалось загрузить аватар. Попробуйте позже.');
-    }
-}
-
-    let avatarUrl = '';
-    try {
-        const vkUser = await bridge.send('VKWebAppGetUserInfo');
-        avatarUrl = vkUser.photo_100 || '';
-    } catch(e) {}
+async function loadProfileFromServer() {
+    const token = await ensureAccessToken();
+    const userInfo = await bridge.send('VKWebAppGetUserInfo');
+    const vkId = userInfo.id;
 
     const response = await fetch('/api/profile', {
         headers: {
@@ -697,14 +675,7 @@ async function uploadAvatar() {
     });
     const pet = await response.json();
     if (pet && pet.name) {
-        saveProfileLocally(pet.name, pet.type, pet.zodiac_sign, pet.status || '');
-        if (!pet.avatar_url && avatarUrl) {
-            await fetch('/api/profile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-VK-ID': vkId, 'X-Access-Token': token },
-                body: JSON.stringify({ ...pet, avatar_url: avatarUrl })
-            });
-        }
+        saveProfileLocally(pet.name, pet.type, pet.zodiac_sign, pet.status || '', pet.avatar_url || '');
         return pet;
     }
     return null;
@@ -808,8 +779,8 @@ function switchTab(tabName) {
 }
 
 // ==================== ОБРАБОТЧИКИ ====================
-document.addEventListener('DOMContentLoaded', () => {
-    updateUIBasedOnProfile();
+document.addEventListener('DOMContentLoaded', async () => {   // ← Исправлено: добавлен async
+    await updateUIBasedOnProfile();   // ← Теперь await работает корректно
 
     document.getElementById('saveProfileBtn')?.addEventListener('click', async () => {
         const petName = document.getElementById('petName')?.value.trim();
@@ -821,8 +792,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!zodiacSign) { alert('Выберите свой знак зодиака'); return; }
 
         try {
-            await saveProfileOnServer(petName, petType, zodiacSign, petStatus);
-            updateUIBasedOnProfile();
+            await saveProfileOnServer(petName, petType, zodiacSign, petStatus, currentAvatarUrl);
+            await updateUIBasedOnProfile();
             switchTab('thoughts');
         } catch (e) {
             alert('Не удалось сохранить профиль. Попробуйте позже.');
@@ -837,6 +808,13 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('petType').value = profile.petType || 'Кот';
             document.getElementById('zodiacSign').value = profile.zodiacSign || '';
             document.getElementById('petStatus').value = profile.status || '';
+            currentAvatarUrl = profile.avatarUrl || '';
+
+            const preview = document.getElementById('avatarPreview');
+            if (currentAvatarUrl && preview) {
+                preview.innerHTML = `<img src="${currentAvatarUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+            }
+
             document.getElementById('profileTitle').textContent = '✏️ Редактировать профиль';
             document.getElementById('loadingScreen').classList.add('hidden');
             document.getElementById('profileScreen').classList.remove('hidden');
@@ -903,6 +881,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Новые обработчики
     document.getElementById('uploadPhotoBtn')?.addEventListener('click', uploadPhotoToVK);
     document.getElementById('loadMoreAll')?.addEventListener('click', () => loadAllFeed());
+    document.getElementById('uploadAvatarBtn')?.addEventListener('click', uploadAvatar);
 
     document.querySelectorAll('.feed-subtab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
