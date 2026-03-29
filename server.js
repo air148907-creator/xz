@@ -31,7 +31,7 @@ async function sendVkMessage(userId, message) {
   }
 }
 
-// ==================== MIDDLEWARE АВТОРИЗАЦИИ (ПРОВЕРКА ТОКЕНА ОТКЛЮЧЕНА) ====================
+// ==================== MIDDLEWARE АВТОРИЗАЦИИ ====================
 async function verifyVkToken(vk_id, access_token) {
   try {
     const response = await axios.get('https://api.vk.com/method/users.get', {
@@ -57,7 +57,7 @@ async function authMiddleware(req, res, next) {
     return res.status(401).json({ error: 'Missing credentials' });
   }
 
-  // ВРЕМЕННО ОТКЛЮЧАЕМ ПРОВЕРКУ ТОКЕНА
+  // Временно отключаем проверку токена (можно раскомментировать позже)
   // const isValid = await verifyVkToken(vk_id, access_token);
   // if (!isValid) {
   //   return res.status(403).json({ error: 'Invalid token' });
@@ -70,7 +70,7 @@ async function authMiddleware(req, res, next) {
 
 // ==================== ЭНДПОИНТЫ ====================
 
-// Получить профиль
+// Получить профиль питомца
 app.get('/api/profile', authMiddleware, (req, res) => {
   const { vk_id } = req;
   console.log('GET /api/profile for vk_id:', vk_id);
@@ -83,12 +83,12 @@ app.get('/api/profile', authMiddleware, (req, res) => {
   });
 });
 
-// Сохранить профиль
+// Сохранить профиль (с avatar_url)
 app.post('/api/profile', authMiddleware, (req, res) => {
   const { vk_id } = req;
-  const { name, type, zodiac_sign, photo_url, status } = req.body;
+  const { name, type, zodiac_sign, photo_url, avatar_url, status } = req.body;
 
-  console.log('POST /api/profile:', { vk_id, name, type, zodiac_sign, status });
+  console.log('POST /api/profile:', { vk_id, name, type, zodiac_sign, status, avatar_url });
 
   if (!name || !type || !zodiac_sign) {
     console.log('Missing fields');
@@ -110,9 +110,9 @@ app.post('/api/profile', authMiddleware, (req, res) => {
       if (existing) {
         db.run(`
           UPDATE pets
-          SET name = ?, type = ?, zodiac_sign = ?, photo_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+          SET name = ?, type = ?, zodiac_sign = ?, photo_url = ?, avatar_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP
           WHERE vk_id = ?
-        `, [name, type, zodiac_sign, photo_url, status, vk_id], function(err) {
+        `, [name, type, zodiac_sign, photo_url, avatar_url, status, vk_id], function(err) {
           if (err) {
             console.error('Ошибка UPDATE pets:', err);
             return res.status(500).json({ error: err.message });
@@ -122,9 +122,9 @@ app.post('/api/profile', authMiddleware, (req, res) => {
         });
       } else {
         db.run(`
-          INSERT INTO pets (vk_id, name, type, zodiac_sign, photo_url, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `, [vk_id, name, type, zodiac_sign, photo_url, status], function(err) {
+          INSERT INTO pets (vk_id, name, type, zodiac_sign, photo_url, avatar_url, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `, [vk_id, name, type, zodiac_sign, photo_url, avatar_url, status], function(err) {
           if (err) {
             console.error('Ошибка INSERT pets:', err);
             return res.status(500).json({ error: err.message });
@@ -155,7 +155,7 @@ async function getFriendsList(vk_id, access_token) {
   }
 }
 
-// Лента друзей
+// Лента друзей (питомцы друзей)
 app.get('/api/feed/friends', authMiddleware, async (req, res) => {
   const { vk_id, access_token } = req;
   const limit = parseInt(req.query.limit) || 20;
@@ -190,6 +190,87 @@ app.get('/api/feed/friends', authMiddleware, async (req, res) => {
       }
       res.json({ pets: rows, total: row.total });
     });
+  });
+});
+
+// Лента всех пользователей (посты с фото)
+app.get('/api/feed/all', authMiddleware, (req, res) => {
+  const limit = parseInt(req.query.limit) || 20;
+  const offset = parseInt(req.query.offset) || 0;
+
+  const sql = `
+    SELECT p.*, pets.name as pet_name, pets.avatar_url, pets.vk_id as owner_vk_id
+    FROM posts p
+    JOIN pets ON p.vk_id = pets.vk_id
+    ORDER BY p.created_at DESC
+    LIMIT ? OFFSET ?
+  `;
+  db.all(sql, [limit, offset], (err, rows) => {
+    if (err) {
+      console.error('Ошибка SELECT /api/feed/all:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(rows);
+  });
+});
+
+// Публикация фото на стену ВК и в ленту приложения
+app.post('/api/wall/post', authMiddleware, async (req, res) => {
+  const { vk_id, access_token } = req;
+  const { photo_id, caption } = req.body;
+
+  if (!photo_id) {
+    return res.status(400).json({ error: 'photo_id required' });
+  }
+
+  try {
+    // Публикуем на стену пользователя
+    const wallResponse = await axios.post('https://api.vk.com/method/wall.post', null, {
+      params: {
+        owner_id: vk_id,
+        message: caption || '',
+        attachments: `photo${vk_id}_${photo_id}`,
+        access_token: access_token,
+        v: '5.131'
+      }
+    });
+    if (wallResponse.data.error) {
+      console.error('VK wall.post error:', wallResponse.data.error);
+      return res.status(500).json({ error: wallResponse.data.error });
+    }
+    const wallPostId = wallResponse.data.response.post_id;
+
+    // Получаем прямой URL фото
+    const photoInfo = await axios.get('https://api.vk.com/method/photos.getById', {
+      params: {
+        photos: `${vk_id}_${photo_id}`,
+        access_token: access_token,
+        v: '5.131'
+      }
+    });
+    const directUrl = photoInfo.data.response[0].sizes.pop().url;
+
+    // Сохраняем пост в БД
+    db.run(`INSERT INTO posts (vk_id, photo_url, caption, wall_post_id) VALUES (?, ?, ?, ?)`,
+      [vk_id, directUrl, caption || '', wallPostId], function(err) {
+        if (err) {
+          console.error('Ошибка сохранения поста:', err);
+          return res.status(500).json({ error: err.message });
+        }
+        res.json({ success: true, post_id: this.lastID, wall_post_id: wallPostId });
+      });
+  } catch (error) {
+    console.error('Ошибка публикации:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Получить аватар питомца (можно также использовать фото профиля VK)
+app.get('/api/pets/avatar', authMiddleware, (req, res) => {
+  const { vk_id } = req;
+  db.get('SELECT avatar_url FROM pets WHERE vk_id = ?', [vk_id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ avatar_url: row ? row.avatar_url : null });
   });
 });
 
@@ -231,7 +312,6 @@ app.post('/api/like/:petId', authMiddleware, (req, res) => {
               sendVkMessage(pet.vk_id, message);
             });
           }
-
           res.json({ liked: true });
         });
       }
@@ -239,7 +319,7 @@ app.post('/api/like/:petId', authMiddleware, (req, res) => {
   });
 });
 
-// Общий рейтинг
+// Общий рейтинг питомцев
 app.get('/api/rating', (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
   const offset = parseInt(req.query.offset) || 0;

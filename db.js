@@ -8,6 +8,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 db.serialize(() => {
+  // Таблица пользователей
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       vk_id TEXT PRIMARY KEY,
@@ -16,6 +17,7 @@ db.serialize(() => {
     )
   `);
 
+  // Таблица питомцев (добавлено поле avatar_url)
   db.run(`
     CREATE TABLE IF NOT EXISTS pets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,6 +26,7 @@ db.serialize(() => {
       type TEXT NOT NULL,
       zodiac_sign TEXT NOT NULL,
       photo_url TEXT,
+      avatar_url TEXT,
       status TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -31,6 +34,7 @@ db.serialize(() => {
     )
   `);
 
+  // Таблица лайков
   db.run(`
     CREATE TABLE IF NOT EXISTS likes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,14 +47,27 @@ db.serialize(() => {
     )
   `);
 
-  // Добавляем колонку status, если её нет
+  // Новая таблица: посты для ленты всех пользователей
+  db.run(`
+    CREATE TABLE IF NOT EXISTS posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      vk_id TEXT NOT NULL,
+      photo_url TEXT NOT NULL,
+      caption TEXT,
+      wall_post_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (vk_id) REFERENCES users(vk_id)
+    )
+  `);
+
+  // Добавляем колонку avatar_url в pets, если её нет
   db.all("PRAGMA table_info(pets)", (err, rows) => {
     if (err) return;
-    const hasStatus = rows.some(col => col.name === 'status');
-    if (!hasStatus) {
-      db.run("ALTER TABLE pets ADD COLUMN status TEXT", (err) => {
-        if (err) console.error("Не удалось добавить колонку status:", err);
-        else console.log("Колонка status добавлена");
+    const hasAvatar = rows.some(col => col.name === 'avatar_url');
+    if (!hasAvatar) {
+      db.run("ALTER TABLE pets ADD COLUMN avatar_url TEXT", (err) => {
+        if (err) console.error("Не удалось добавить avatar_url:", err);
+        else console.log("Колонка avatar_url добавлена");
       });
     }
   });

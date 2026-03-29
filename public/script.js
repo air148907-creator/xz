@@ -1,29 +1,18 @@
-// ========== ГАРАНТИРОВАННАЯ ЭМУЛЯЦИЯ VK BRIDGE ==========
+// Если VK Bridge не загрузился, создаём эмуляцию (только для отладки, в продакшене можно убрать)
 if (!window.vkBridge) {
     window.vkBridge = {
         send: (method, params) => {
             console.log(`[EMULATED] VK Bridge send: ${method}`, params);
             if (method === 'VKWebAppGetUserInfo') {
-                return Promise.resolve({
-                    id: '123456789',
-                    first_name: 'Тестовый',
-                    last_name: 'Пользователь'
-                });
+                return Promise.resolve({ id: '123456789', first_name: 'Тест', last_name: 'Тестов', photo_100: '' });
             }
             if (method === 'VKWebAppGetAuthToken') {
-                return Promise.resolve({
-                    access_token: 'test_token_12345'
-                });
+                return Promise.resolve({ access_token: 'test_token_12345' });
             }
-            if (method === 'VKWebAppInit') {
-                return Promise.resolve({ result: true });
-            }
-            if (method === 'VKWebAppShare') {
-                return Promise.resolve({ result: true });
-            }
-            if (method === 'VKWebAppAllowMessagesFromGroup') {
-                return Promise.resolve({ result: true });
-            }
+            if (method === 'VKWebAppInit') return Promise.resolve({ result: true });
+            if (method === 'VKWebAppShare') return Promise.resolve({ result: true });
+            if (method === 'VKWebAppAllowMessagesFromGroup') return Promise.resolve({ result: true });
+            if (method === 'VKWebAppUploadPhoto') return Promise.resolve({ photo_id: '123456', owner_id: '123456789' });
             return Promise.resolve({});
         },
         supports: () => false
@@ -36,7 +25,7 @@ bridge.send('VKWebAppInit').catch(() => {});
 
 // ==================== КОНСТАНТЫ ====================
 const VK_APP_ID = 54466618;
-const API_BASE_URL = ''; // пустой, так как статика отдаётся с того же сервера
+const API_BASE_URL = '';
 const STORAGE_KEY = 'petProfile';
 const CHAT_HISTORY_KEY = 'chatHistory';
 
@@ -68,7 +57,7 @@ async function ensureAccessToken() {
         } else {
             bridge.send('VKWebAppGetAuthToken', {
                 app_id: VK_APP_ID,
-                scope: 'friends'
+                scope: 'friends,photos,wall'
             }).then(data => {
                 localStorage.setItem('vk_access_token', data.access_token);
                 resolve(data.access_token);
@@ -77,7 +66,7 @@ async function ensureAccessToken() {
     });
 }
 
-// ==================== ФУНКЦИИ ЧАТА ====================
+// ==================== ФУНКЦИИ ЧАТА (без изменений) ====================
 function loadChatHistory() {
     const history = localStorage.getItem(CHAT_HISTORY_KEY);
     return history ? JSON.parse(history) : [];
@@ -194,7 +183,7 @@ async function handleChatSend() {
     scrollChatToBottom(true);
 }
 
-// ==================== ГОРОСКОП ====================
+// ==================== ГОРОСКОП (без изменений) ====================
 function getTimeUntilMidnight() {
     const now = new Date();
     const midnight = new Date(now);
@@ -393,7 +382,7 @@ function renderPetCard(pet, withOwnerLink = true) {
     card.innerHTML = `
         <div style="display: flex; align-items: center; gap: 15px; background: #f5f5f5; border-radius: 20px; padding: 15px; margin-bottom: 10px;">
             <div style="width: 60px; height: 60px; border-radius: 50%; background: #ddd; display: flex; align-items: center; justify-content: center; font-size: 30px;">
-                ${pet.photo_url ? `<img src="${pet.photo_url}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : '🐾'}
+                ${pet.avatar_url ? `<img src="${pet.avatar_url}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : (pet.photo_url ? `<img src="${pet.photo_url}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : '🐾')}
             </div>
             <div style="flex:1;">
                 <div style="font-weight:bold; font-size:18px;">${escapeHtml(pet.name)}</div>
@@ -428,8 +417,11 @@ async function toggleLike(petId) {
     });
     const result = await response.json();
     const activeTab = document.querySelector('.tab-btn.active')?.id;
-    if (activeTab === 'tabFriendsFeed') loadFriendsFeed(true);
-    else if (activeTab === 'tabRating') {
+    if (activeTab === 'tabFeed') {
+        const activeSubtab = document.querySelector('.feed-subtab-btn.active').dataset.feed;
+        if (activeSubtab === 'friends') loadFriendsFeed(true);
+        else loadAllFeed(true);
+    } else if (activeTab === 'tabRating') {
         loadTop24h();
         loadRating(true);
     }
@@ -462,7 +454,7 @@ async function loadFriendsFeed(reset = false) {
         const loadMoreBtn = document.getElementById('loadMoreFriends');
         if (loadMoreBtn) loadMoreBtn.style.display = data.pets.length < FRIENDS_LIMIT ? 'none' : 'block';
     } catch (e) {
-        console.error('Ошибка загрузки ленты', e);
+        console.error('Ошибка загрузки ленты друзей', e);
     }
 }
 
@@ -502,8 +494,106 @@ async function loadTop24h() {
     }
 }
 
+// ==================== НОВЫЕ ФУНКЦИИ ДЛЯ ЛЕНТЫ ВСЕХ И ПУБЛИКАЦИИ ====================
+
+let allOffset = 0;
+const ALL_LIMIT = 10;
+
+async function loadAllFeed(reset = false) {
+    if (reset) allOffset = 0;
+    const container = document.getElementById('allFeedContainer');
+    if (!container) return;
+    try {
+        const token = await ensureAccessToken();
+        const userInfo = await bridge.send('VKWebAppGetUserInfo');
+        const vkId = userInfo.id;
+        const url = `/api/feed/all?limit=${ALL_LIMIT}&offset=${allOffset}`;
+        const response = await fetch(url, {
+            headers: { 'X-VK-ID': vkId, 'X-Access-Token': token }
+        });
+        const posts = await response.json();
+        if (reset) container.innerHTML = '';
+        posts.forEach(post => container.appendChild(renderPost(post)));
+        allOffset += posts.length;
+        const loadMoreAllBtn = document.getElementById('loadMoreAll');
+        if (loadMoreAllBtn) loadMoreAllBtn.style.display = posts.length < ALL_LIMIT ? 'none' : 'block';
+    } catch (e) {
+        console.error('Ошибка загрузки ленты "Все":', e);
+    }
+}
+
+function renderPost(post) {
+    const div = document.createElement('div');
+    div.className = 'post-card';
+    div.innerHTML = `
+        <div class="post-header">
+            <img class="post-avatar" src="${post.avatar_url || 'https://vk.com/images/camera_100.png'}" onerror="this.src='https://vk.com/images/camera_100.png'">
+            <span class="post-author">${escapeHtml(post.pet_name)}</span>
+        </div>
+        <img class="post-image" src="${post.photo_url}" alt="Фото">
+        <div class="post-caption">${escapeHtml(post.caption)}</div>
+        <div class="post-date">${new Date(post.created_at).toLocaleString()}</div>
+    `;
+    return div;
+}
+
+async function uploadPhotoToVK() {
+    try {
+        const result = await bridge.send('VKWebAppUploadPhoto', {});
+        const photoId = result.photo_id;
+        const caption = prompt('Введите подпись к фото (необязательно):', '');
+        const token = await ensureAccessToken();
+        const userInfo = await bridge.send('VKWebAppGetUserInfo');
+        const vkId = userInfo.id;
+        const response = await fetch('/api/wall/post', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-VK-ID': vkId,
+                'X-Access-Token': token
+            },
+            body: JSON.stringify({ photo_id: photoId, caption: caption })
+        });
+        const data = await response.json();
+        if (data.success) {
+            alert('Фото опубликовано на стене и в ленте приложения!');
+            const activeSubtab = document.querySelector('.feed-subtab-btn.active').dataset.feed;
+            if (activeSubtab === 'all') loadAllFeed(true);
+        } else {
+            alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки фото:', error);
+        alert('Не удалось загрузить фото. Возможно, нет прав.');
+    }
+}
+
+function switchFeedSubtab(feedType) {
+    const friendsContainer = document.getElementById('friendsFeedContainer');
+    const allContainer = document.getElementById('allFeedContainer');
+    const loadMoreFriendsBtn = document.getElementById('loadMoreFriends');
+    const loadMoreAllBtn = document.getElementById('loadMoreAll');
+    const subtabBtns = document.querySelectorAll('.feed-subtab-btn');
+    subtabBtns.forEach(btn => btn.classList.remove('active'));
+    if (feedType === 'friends') {
+        document.querySelector('.feed-subtab-btn[data-feed="friends"]').classList.add('active');
+        friendsContainer.style.display = 'block';
+        allContainer.style.display = 'none';
+        loadMoreFriendsBtn.style.display = 'block';
+        loadMoreAllBtn.style.display = 'none';
+        loadFriendsFeed(true);
+    } else {
+        document.querySelector('.feed-subtab-btn[data-feed="all"]').classList.add('active');
+        friendsContainer.style.display = 'none';
+        allContainer.style.display = 'block';
+        loadMoreFriendsBtn.style.display = 'none';
+        loadMoreAllBtn.style.display = 'block';
+        loadAllFeed(true);
+    }
+}
+
 // ==================== ПРОФИЛЬ НА СЕРВЕРЕ ====================
-async function saveProfileOnServer(name, type, zodiacSign, status = '') {
+async function saveProfileOnServer(name, type, zodiacSign, status = '', avatarUrl = '') {
     const token = await ensureAccessToken();
     const userInfo = await bridge.send('VKWebAppGetUserInfo');
     const vkId = userInfo.id;
@@ -520,21 +610,12 @@ async function saveProfileOnServer(name, type, zodiacSign, status = '') {
             type,
             zodiac_sign: zodiacSign,
             photo_url: '',
+            avatar_url: avatarUrl,
             status: status
         })
     });
 
-    if (!response.ok) {
-        let errorText;
-        try {
-            const errorData = await response.json();
-            errorText = errorData.error || JSON.stringify(errorData);
-        } catch (e) {
-            errorText = await response.text();
-        }
-        console.error('Ответ сервера при ошибке:', errorText);
-        throw new Error(`Ошибка сохранения на сервере: ${response.status} - ${errorText}`);
-    }
+    if (!response.ok) throw new Error('Ошибка сохранения на сервере');
     saveProfileLocally(name, type, zodiacSign, status);
 }
 
@@ -542,6 +623,12 @@ async function loadProfileFromServer() {
     const token = await ensureAccessToken();
     const userInfo = await bridge.send('VKWebAppGetUserInfo');
     const vkId = userInfo.id;
+
+    let avatarUrl = '';
+    try {
+        const vkUser = await bridge.send('VKWebAppGetUserInfo');
+        avatarUrl = vkUser.photo_100 || '';
+    } catch(e) {}
 
     const response = await fetch('/api/profile', {
         headers: {
@@ -552,6 +639,13 @@ async function loadProfileFromServer() {
     const pet = await response.json();
     if (pet && pet.name) {
         saveProfileLocally(pet.name, pet.type, pet.zodiac_sign, pet.status || '');
+        if (!pet.avatar_url && avatarUrl) {
+            await fetch('/api/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-VK-ID': vkId, 'X-Access-Token': token },
+                body: JSON.stringify({ ...pet, avatar_url: avatarUrl })
+            });
+        }
         return pet;
     }
     return null;
@@ -612,18 +706,18 @@ function switchTab(tabName) {
     const tabChat = document.getElementById('tabChat');
     const tabHoroscope = document.getElementById('tabHoroscope');
     const tabBulletin = document.getElementById('tabBulletin');
-    const tabFriendsFeed = document.getElementById('tabFriendsFeed');
+    const tabFeed = document.getElementById('tabFeed');
     const tabRatingBtn = document.getElementById('tabRating');
 
     const thoughtsTab = document.getElementById('thoughtsTab');
     const chatTab = document.getElementById('chatTab');
     const horoscopeTab = document.getElementById('horoscopeTab');
     const bulletinTab = document.getElementById('bulletinTab');
-    const friendsFeedTab = document.getElementById('friendsFeedTab');
+    const feedTab = document.getElementById('feedTab');
     const ratingTab = document.getElementById('ratingTab');
 
-    [tabThoughts, tabChat, tabHoroscope, tabBulletin, tabFriendsFeed, tabRatingBtn].forEach(btn => btn?.classList.remove('active'));
-    [thoughtsTab, chatTab, horoscopeTab, bulletinTab, friendsFeedTab, ratingTab].forEach(tab => tab?.classList.remove('active'));
+    [tabThoughts, tabChat, tabHoroscope, tabBulletin, tabFeed, tabRatingBtn].forEach(btn => btn?.classList.remove('active'));
+    [thoughtsTab, chatTab, horoscopeTab, bulletinTab, feedTab, ratingTab].forEach(tab => tab?.classList.remove('active'));
 
     if (tabName === 'thoughts') {
         tabThoughts?.classList.add('active');
@@ -640,10 +734,12 @@ function switchTab(tabName) {
     } else if (tabName === 'bulletin') {
         tabBulletin?.classList.add('active');
         bulletinTab?.classList.add('active');
-    } else if (tabName === 'friends') {
-        tabFriendsFeed?.classList.add('active');
-        friendsFeedTab?.classList.add('active');
-        loadFriendsFeed(true);
+    } else if (tabName === 'feed') {
+        tabFeed?.classList.add('active');
+        feedTab?.classList.add('active');
+        const activeSubtab = document.querySelector('.feed-subtab-btn.active').dataset.feed;
+        if (activeSubtab === 'friends') loadFriendsFeed(true);
+        else loadAllFeed(true);
     } else if (tabName === 'rating') {
         tabRatingBtn?.classList.add('active');
         ratingTab?.classList.add('active');
@@ -706,7 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (target.id === 'tabChat') switchTab('chat');
             else if (target.id === 'tabHoroscope') switchTab('horoscope');
             else if (target.id === 'tabBulletin') switchTab('bulletin');
-            else if (target.id === 'tabFriendsFeed') switchTab('friends');
+            else if (target.id === 'tabFeed') switchTab('feed');
             else if (target.id === 'tabRating') switchTab('rating');
         });
     }
@@ -744,4 +840,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('loadMoreFriends')?.addEventListener('click', () => loadFriendsFeed());
     document.getElementById('loadMoreRating')?.addEventListener('click', () => loadRating());
+
+    // Новые обработчики
+    document.getElementById('uploadPhotoBtn')?.addEventListener('click', uploadPhotoToVK);
+    document.getElementById('loadMoreAll')?.addEventListener('click', () => loadAllFeed());
+
+    document.querySelectorAll('.feed-subtab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const feedType = e.currentTarget.dataset.feed;
+            switchFeedSubtab(feedType);
+        });
+    });
 });

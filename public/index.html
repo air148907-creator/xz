@@ -64,6 +64,7 @@
             <div class="header">
                 <div class="pet-info" id="petInfoDisplay"></div>
                 <button class="edit-profile-btn" id="editProfileBtn" title="Редактировать профиль">✏️</button>
+                <button class="upload-photo-btn" id="uploadPhotoBtn" title="Опубликовать фото">📸</button>
             </div>
 
             <div class="tabs">
@@ -71,7 +72,7 @@
                 <button class="tab-btn" id="tabChat">💬 Чат с Мафией</button>
                 <button class="tab-btn" id="tabHoroscope">🔮 Гороскоп</button>
                 <button class="tab-btn" id="tabBulletin">📋 Объявления</button>
-                <button class="tab-btn" id="tabFriendsFeed">👥 Лента друзей</button>
+                <button class="tab-btn" id="tabFeed">📸 Лента</button>
                 <button class="tab-btn" id="tabRating">🏆 Рейтинг</button>
             </div>
 
@@ -126,11 +127,17 @@
                 </div>
             </div>
 
-            <!-- Вкладка ленты друзей -->
-            <div class="tab-content" id="friendsFeedTab">
+            <!-- Вкладка Лента (с подвкладками Друзья / Все) -->
+            <div class="tab-content" id="feedTab">
+                <div class="feed-subtabs">
+                    <button class="feed-subtab-btn active" data-feed="friends">👥 Друзья</button>
+                    <button class="feed-subtab-btn" data-feed="all">🌍 Все</button>
+                </div>
                 <div id="friendsFeedContainer" style="padding: 15px;"></div>
+                <div id="allFeedContainer" style="padding: 15px; display: none;"></div>
                 <div style="text-align: center; padding: 10px;">
-                    <button id="loadMoreFriends" class="vk-button" style="background: #666;">Загрузить ещё</button>
+                    <button id="loadMoreFriends" class="vk-button" style="background: #666;">Загрузить ещё (друзья)</button>
+                    <button id="loadMoreAll" class="vk-button" style="background: #666; display: none;">Загрузить ещё (все)</button>
                 </div>
             </div>
 

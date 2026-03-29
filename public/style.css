@@ -144,7 +144,7 @@ body {
     border-radius: 30px;
 }
 
-.edit-profile-btn {
+.edit-profile-btn, .upload-photo-btn {
     background: none;
     border: none;
     font-size: 24px;
@@ -154,7 +154,7 @@ body {
     transition: background 0.3s;
 }
 
-.edit-profile-btn:hover {
+.edit-profile-btn:hover, .upload-photo-btn:hover {
     background: #f0f0f0;
 }
 
@@ -408,4 +408,62 @@ body {
 
 .like-btn:active {
     transform: scale(0.95);
+}
+
+/* НОВЫЕ СТИЛИ ДЛЯ ЛЕНТЫ И ПОДВКЛАДОК */
+.feed-subtabs {
+    display: flex;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+.feed-subtab-btn {
+    flex: 1;
+    padding: 8px;
+    background: #f0f0f0;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+}
+.feed-subtab-btn.active {
+    background: #764ba2;
+    color: white;
+}
+
+/* Стили для постов */
+.post-card {
+    background: white;
+    border-radius: 20px;
+    margin-bottom: 15px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.post-header {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    gap: 10px;
+}
+.post-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.post-author {
+    font-weight: bold;
+}
+.post-image {
+    width: 100%;
+    max-height: 400px;
+    object-fit: cover;
+}
+.post-caption {
+    padding: 10px;
+    font-size: 14px;
+}
+.post-date {
+    padding: 5px 10px 10px;
+    font-size: 12px;
+    color: #999;
 }
