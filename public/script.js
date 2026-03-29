@@ -79,7 +79,7 @@ async function uploadAvatar() {
     const preview = document.getElementById('avatarPreview');
     if (!preview) return;
 
-    // Проверка поддержки VKWebAppUploadPhoto
+    // Проверка поддержки метода VKWebAppUploadPhoto
     if (typeof bridge.supports === 'function' && !bridge.supports('VKWebAppUploadPhoto')) {
         alert('📸 Загрузка аватарки доступна только в мобильном приложении VK.\n\nОткройте мини-приложение через официальное приложение VK на телефоне.');
         return;
@@ -114,7 +114,7 @@ async function uploadAvatar() {
 
 // ==================== ЗАГРУЗКА ФОТО В ЛЕНТУ ====================
 async function uploadPhotoToVK() {
-    // Проверка поддержки VKWebAppUploadPhoto
+    // Проверка поддержки метода VKWebAppUploadPhoto
     if (typeof bridge.supports === 'function' && !bridge.supports('VKWebAppUploadPhoto')) {
         alert('📸 Загрузка и публикация фото доступны только в мобильном приложении VK.');
         return;
